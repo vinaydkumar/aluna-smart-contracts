@@ -39,9 +39,19 @@ $ npx buidler coverage --network coverage
 
 ## Deploying
 
-This project uses [buidler](https://buidler.dev/) to deploy. you have to configure a .env file to deploy. 
+This project uses [buidler](https://buidler.dev/) scripts to deploy. 
 
-1. to create mock tests (testnet only, we may use kovan to consider uniswap contracts)
+In order to run the deploy scripts you need to create an `.env` file, please refer to our `.env.example`
+
+Tests were done on the KOVAN network in order to interact with uniswap contracts.
+
+1. deploy mock tokens
+
+```
+$ npx buidler deployMockTokens --network --kovan
+```
+
+1. deploy mock tokens
 
 ```
 $ npx buidler deployMockTokens --network --kovan
