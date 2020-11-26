@@ -21,10 +21,9 @@
 * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 */
 
-pragma solidity ^0.6.1;
+pragma solidity 0.6.2;
 
 
-import "@openzeppelin/contracts/math/Math.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 
@@ -34,9 +33,10 @@ contract LPTokenWrapper {
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
 
+    uint256 private _totalSupply;
+
     IERC20 public stakeToken;
 
-    uint256 private _totalSupply;
     mapping(address => uint256) private _balances;
 
     constructor(IERC20 _stakeToken) public {

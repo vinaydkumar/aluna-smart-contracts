@@ -1,4 +1,4 @@
-pragma solidity ^0.5.6;
+pragma solidity 0.5.6;
 
 import "@openzeppelin/contracts/ownership/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
@@ -38,7 +38,7 @@ contract PaymentReceiver is ERC20, Ownable {
       * @dev Set rewards pool percentage share of payments
       * @param _rewardsPoolPercentage new percentage share
     */
-    function setRewardsPoolPercentage(uint256 _rewardsPoolPercentage) public onlyOwner {
+    function setRewardsPoolPercentage(uint256 _rewardsPoolPercentage) external onlyOwner {
         _setRewardsPoolPercentage(_rewardsPoolPercentage);
     }
 
@@ -46,7 +46,7 @@ contract PaymentReceiver is ERC20, Ownable {
       * @dev Set rewards pool address
       * @param _rewardsPoolAddress new rewards pool address
     */
-    function setRewardsPoolAddress(address _rewardsPoolAddress) public onlyOwner {
+    function setRewardsPoolAddress(address _rewardsPoolAddress) external onlyOwner {
         _setRewardsPoolAddress(_rewardsPoolAddress);
     }
 
@@ -59,17 +59,17 @@ contract PaymentReceiver is ERC20, Ownable {
     * @param _value amount ALN tokens to transfer.
     * @param _paymentId id of the payment provided by Aluna.
     */
-    function processPayment(uint256 _value, bytes32 _paymentId) public {
-        require(_value > 0, "PaymentProcessor: non-positive payment value");
+    function processPayment(uint256 _value, bytes32 _paymentId) external {
+        require(_value != 0, "PaymentProcessor: non-positive payment value");
         require(_paymentId != 0x0, "PaymentProcessor: invalid payment id");
         require(payments[_paymentId].value == 0, "PaymentProcessor: payment id already used");
         uint256 _rewardsPoolAmount = (_value.mul(rewardsPoolPercentage)).div(100);
         uint256 _remainingAmount = _value.sub(_rewardsPoolAmount);
         _transfer(msg.sender, owner(), _remainingAmount);
         _approve(msg.sender, rewardsPoolAddress, _rewardsPoolAmount);
+        payments[_paymentId] = Payment(_value, _rewardsPoolAmount, false);
         RewardsPool(rewardsPoolAddress).deposit(msg.sender, _rewardsPoolAmount);
         emit PaymentProcessed(msg.sender, _value, _paymentId);
-        payments[_paymentId] = Payment(_value, _rewardsPoolAmount, false);
     }
 
     /**
@@ -79,7 +79,7 @@ contract PaymentReceiver is ERC20, Ownable {
     * @param _sender the sender of the payment to be refunded
     * @param _paymentId id of the payment provided by Aluna.
     */
-    function refundPayment(address _sender, bytes32 _paymentId) public onlyOwner {
+    function refundPayment(address _sender, bytes32 _paymentId) external onlyOwner {
         require(!payments[_paymentId].refunded, "PaymentProcessor: payment already refunded");
         uint256 value_to_refund = payments[_paymentId].value;
         _transfer(owner(), _sender, payments[_paymentId].value.sub(payments[_paymentId].poolFee));
@@ -93,7 +93,6 @@ contract PaymentReceiver is ERC20, Ownable {
       * @param _rewardsPoolPercentage new percentage share
     */
     function _setRewardsPoolPercentage(uint256 _rewardsPoolPercentage) internal {
-        require(_rewardsPoolPercentage >= 0, "PaymentProcessor: rewards pool percentage is not 0 or above");
         require(_rewardsPoolPercentage <= 100, "PaymentProcessor: rewards pool percentage is not 100 or lower");
         rewardsPoolPercentage = _rewardsPoolPercentage;
     }

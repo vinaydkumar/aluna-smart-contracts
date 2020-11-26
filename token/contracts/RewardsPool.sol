@@ -1,4 +1,4 @@
-pragma solidity ^0.5.6;
+pragma solidity 0.5.6;
 
 import "@openzeppelin/upgrades/contracts/Initializable.sol";
 import "@openzeppelin/contracts/ownership/Ownable.sol";
@@ -40,8 +40,8 @@ contract RewardsPool is Initializable, Ownable {
      * @param from The address of the sender
      * @param value Amount of tokens
     */
-    function deposit(address from, uint256 value) public {
-        tokenALN.transferFrom(from, address(this), value);
+    function deposit(address from, uint256 value) external {
+        require(tokenALN.transferFrom(from, address(this), value), "Deposit failed");
         emit DepositComplete(from, value);
     }
 
@@ -50,10 +50,10 @@ contract RewardsPool is Initializable, Ownable {
      * @param receivers The addresses of the rewards receivers
      * @param values The value in tokens to be sent to each receiver
     */
-    function sendRewards(address[] memory receivers, uint256[] memory values) public onlyOwner {
+    function sendRewards(address[] calldata receivers, uint256[] calldata values) external onlyOwner {
         require(receivers.length == values.length, "RewardsPool: Invalid length of receivers and values");
         for (uint i = 0; i < receivers.length; i++) {
-            tokenALN.transfer(receivers[i], values[i]);
+            require(tokenALN.transfer(receivers[i], values[i]), "Reward failed");
             emit RewardComplete(receivers[i], values[i]);
         }
     }
