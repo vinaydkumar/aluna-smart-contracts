@@ -21,7 +21,7 @@
 * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 */
 
-pragma solidity ^0.6.1;
+pragma solidity 0.6.2;
 
 import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
@@ -79,9 +79,9 @@ contract Treasury is Ownable, ITreasury {
     }
 
     function deposit(IERC20 token, uint256 amount) external override {
-        token.safeTransferFrom(msg.sender, address(this), amount);
         // portion allocated to ecoFund
         ecoFundAmts[address(token)] = amount.mul(fundPercentage).div(PERCENTAGE_PRECISION);
+        token.safeTransferFrom(msg.sender, address(this), amount);
     }
 
     // only default token withdrawals allowed
@@ -99,13 +99,14 @@ contract Treasury is Ownable, ITreasury {
         if (srcToken.allowance(address(this), address(swapRouter)) <= amount) {
             srcToken.safeApprove(address(swapRouter), uint256(-1));
         }
-        swapRouter.swapExactTokensForTokens(
+        uint[] memory swappedAmounts = swapRouter.swapExactTokensForTokens(
             amount,
             0,
             routeDetails,
             address(this),
             block.timestamp + 100
         );
+        require(swappedAmounts.length != 0, "Swap failed");
     }
 
     function withdrawEcoFund(IERC20 token, uint256 amount) external {

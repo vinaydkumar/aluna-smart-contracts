@@ -21,7 +21,7 @@
 * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 */
 
-pragma solidity ^0.6.1;
+pragma solidity 0.6.2;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "./interfaces/IERC20Burnable.sol";
@@ -29,12 +29,11 @@ import "./interfaces/ITreasury.sol";
 import "./interfaces/ISwapRouter.sol";
 import "./LPTokenWrapper.sol";
 import "./AdditionalMath.sol";
-
+import "@openzeppelin/contracts/math/Math.sol";
 
 contract AlunaBoostPool is LPTokenWrapper, Ownable {
     
     using AdditionalMath for uint256;
-    
     
     IERC20 public rewardToken;
     IERC20 public boostToken;
@@ -46,10 +45,11 @@ contract AlunaBoostPool is LPTokenWrapper, Ownable {
     uint256 public tokenCapAmount;
     uint256 public starttime;
     uint256 public duration;
-    uint256 public periodFinish = 0;
-    uint256 public rewardRate = 0;
+    uint256 public periodFinish;
+    uint256 public rewardRate;
     uint256 public lastUpdateTime;
     uint256 public rewardPerTokenStored;
+    uint256 public constant SECONDS_IN_A_DAY = 86400;
     mapping(address => uint256) public userRewardPerTokenPaid;
     mapping(address => uint256) public rewards;
     
@@ -137,14 +137,16 @@ contract AlunaBoostPool is LPTokenWrapper, Ownable {
     {
         if (boostedTotalSupply == 0) return (0,0);
 
-        // 5% increase for each previously user-purchased booster
+        // each previously user-purchased booster will increase price in 5%,
+        // that is, 1 booster means 5% increase, 2 boosters mean 10% and so on
         uint256 boostersBought = numBoostersBought[user];
         boosterPrice = globalBoosterPrice.mul(boostersBought.mul(5).add(100)).div(100);
 
         // increment boostersBought by 1
         boostersBought = boostersBought.add(1);
 
-        // if no. of boosters exceed threshold, increase booster price by boostScaleFactor;
+        // if no. of boosters exceed threshold, increase booster price by boostScaleFactor
+        // for each exceeded booster
         if (boostersBought >= boostThreshold) {
             boosterPrice = boosterPrice
                 .mul((boostersBought.sub(boostThreshold)).mul(boostScaleFactor).add(100))
@@ -152,9 +154,10 @@ contract AlunaBoostPool is LPTokenWrapper, Ownable {
         }
 
         // 2.5% decrease for every 2 hour interval since last global boost purchase
-        boosterPrice = AdditionalMath.pow(boosterPrice, 975, 1000, (block.timestamp.sub(lastBoostPurchase)).div(2 hours));
+        boosterPrice = calculateBoostDevaluation(boosterPrice, 975, 1000, (block.timestamp.sub(lastBoostPurchase)).div(2 hours));
 
         // adjust price based on expected increase in boost supply
+        // each booster will increase balance in an order of 5%
         // boostersBought has been incremented by 1 already
         newBoostBalance = balanceOf(user)
             .mul(boostersBought.mul(5).add(100))
@@ -168,12 +171,12 @@ contract AlunaBoostPool is LPTokenWrapper, Ownable {
 
     // stake visibility is public as overriding LPTokenWrapper's stake() function
     function stake(uint256 amount) public updateReward(msg.sender) override checkStart  {
-        require(amount > 0, "Cannot stake 0");
+        require(amount != 0, "Cannot stake 0");
         super.stake(amount);
 
         // check user cap
         require(
-            balanceOf(msg.sender) <= tokenCapAmount || block.timestamp >= starttime.add(86400),
+            balanceOf(msg.sender) <= tokenCapAmount || block.timestamp >= starttime.add(SECONDS_IN_A_DAY),
             "token cap exceeded"
         );
 
@@ -188,7 +191,7 @@ contract AlunaBoostPool is LPTokenWrapper, Ownable {
     }
 
     function withdraw(uint256 amount) public updateReward(msg.sender) override checkStart {
-        require(amount > 0, "Cannot withdraw 0");
+        require(amount != 0, "Cannot withdraw 0");
         super.withdraw(amount);
         
         // reset boosts :(
@@ -212,7 +215,7 @@ contract AlunaBoostPool is LPTokenWrapper, Ownable {
         stakeToken.safeTransfer(msg.sender, amount);
     }
 
-    function getReward() public updateReward(msg.sender) checkStart {
+    function getReward() external updateReward(msg.sender) checkStart {
         _getReward(msg.sender);
     }
 
@@ -290,7 +293,8 @@ contract AlunaBoostPool is LPTokenWrapper, Ownable {
         // when applying boosts,
         // newBoostBalance has already been calculated in getBoosterPrice()
         if (newBoostBalance == 0) {
-            // each booster adds 5% to current stake amount
+            // each booster adds 5% to current stake amount, that is 1 booster means 5%,
+            // two boosters mean 10% and so on
             newBoostBalance = balanceOf(user).mul(numBoostersBought[user].mul(5).add(100)).div(100);
         }
 
@@ -318,10 +322,31 @@ contract AlunaBoostPool is LPTokenWrapper, Ownable {
 
     function _getReward(address user) internal {
         uint256 reward = earned(user);
-        if (reward > 0) {
+        if (reward != 0) {
             rewards[user] = 0;
-            rewardToken.safeTransfer(user, reward);
             emit RewardPaid(user, reward);
+            rewardToken.safeTransfer(user, reward);
         }
-    }   
+    }
+
+    /// Imported from: https://forum.openzeppelin.com/t/does-safemath-library-need-a-safe-power-function/871/7
+   /// Modified so that it takes in 3 arguments for base
+   /// @return the eventually newly calculated boost price
+   function calculateBoostDevaluation(uint256 a, uint256 b, uint256 c, uint256 exponent) internal pure returns (uint256) {
+        if (exponent == 0) {
+            return a;
+        }
+        else if (exponent == 1) {
+            return a.mul(b).div(c);
+        }
+        else if (a == 0 && exponent != 0) {
+            return 0;
+        }
+        else {
+            uint256 z = a.mul(b).div(c);
+            for (uint256 i = 1; i < exponent; i++)
+                z = z.mul(b).div(c);
+            return z;
+        }
+    }
 }

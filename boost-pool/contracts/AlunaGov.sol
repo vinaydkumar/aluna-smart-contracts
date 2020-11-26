@@ -21,7 +21,7 @@
 * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 */
 
-pragma solidity ^0.6.1;
+pragma solidity 0.6.2;
 
 
 import "./interfaces/ITreasury.sol";
@@ -29,24 +29,11 @@ import "./interfaces/ISwapRouter.sol";
 import "./LPTokenWrapperWithSlash.sol";
 import "./AdditionalMath.sol";
 
-
-
 contract AlunaGov is LPTokenWrapperWithSlash {
     
     using AdditionalMath for uint256;
-    IERC20 public stablecoin;
 
-    ITreasury public treasury;
-    SwapRouter public swapRouter;
-    
-    // 1% = 100
-    uint256 public constant MIN_QUORUM_PUNISHMENT = 500; // 5%
-    uint256 public constant MIN_QUORUM_THRESHOLD = 3000; // 30%
-    uint256 public constant PERCENTAGE_PRECISION = 10000;
-    uint256 public WITHDRAW_THRESHOLD = 1e21; // 1000 yCRV
 
-    mapping(address => uint256) public voteLock; // timestamp that boost stakes are locked after voting
-    
     struct Proposal {
         address proposer;
         address withdrawAddress;
@@ -62,11 +49,22 @@ contract AlunaGov is LPTokenWrapperWithSlash {
         string title;
     }
 
-    mapping (uint256 => Proposal) public proposals;
+    // 1% = 100
+    uint256 public constant MIN_QUORUM_PUNISHMENT = 500; // 5%
+    uint256 public constant MIN_QUORUM_THRESHOLD = 3000; // 30%
+    uint256 public constant PERCENTAGE_PRECISION = 10000;
+    uint256 public constant WITHDRAW_THRESHOLD = 1e21; // 1000 yCRV
+    uint256 public constant proposalPeriod = 2 days;
+    uint256 public constant lockPeriod = 3 days;
+    uint256 public constant minimum = 1337e18; // 1337 ALN
     uint256 public proposalCount;
-    uint256 public proposalPeriod = 2 days;
-    uint256 public lockPeriod = 3 days;
-    uint256 public minimum = 1337e18; // 1337 ALN
+
+    IERC20 public stablecoin;
+    ITreasury public treasury;
+    SwapRouter public swapRouter;
+
+    mapping(address => uint256) public voteLock; // timestamp that boost stakes are locked after voting
+    mapping (uint256 => Proposal) public proposals;
 
     constructor(IERC20 _stakeToken, ITreasury _treasury, SwapRouter _swapRouter)
         public
@@ -74,17 +72,17 @@ contract AlunaGov is LPTokenWrapperWithSlash {
     {
         treasury = _treasury;
         stablecoin = treasury.defaultToken();
+        swapRouter = _swapRouter;
         stablecoin.safeApprove(address(treasury), uint256(-1));
         stakeToken.safeApprove(address(_swapRouter), uint256(-1));
-        swapRouter = _swapRouter;
     }
 
     function propose(
-        string memory _url,
-        string memory _title,
+        string calldata _url,
+        string calldata _title,
         uint256 _withdrawAmount,
         address _withdrawAddress
-    ) public {
+    ) external {
         require(balanceOf(msg.sender) > minimum, "stake more boost");
         proposals[proposalCount++] = Proposal({
             proposer: msg.sender,
@@ -101,7 +99,7 @@ contract AlunaGov is LPTokenWrapperWithSlash {
         voteLock[msg.sender] = lockPeriod.add(block.timestamp);
     }
 
-    function voteFor(uint256 id) public {
+    function voteFor(uint256 id) external {
         require(proposals[id].start < block.timestamp , "<start");
         require(proposals[id].end > block.timestamp , ">end");
         require(proposals[id].againstVotes[msg.sender] == 0, "cannot switch votes");
@@ -113,7 +111,7 @@ contract AlunaGov is LPTokenWrapperWithSlash {
         voteLock[msg.sender] = lockPeriod.add(block.timestamp);
     }
 
-    function voteAgainst(uint256 id) public {
+    function voteAgainst(uint256 id) external {
         require(proposals[id].start < block.timestamp , "<start");
         require(proposals[id].end > block.timestamp , ">end");
         require(proposals[id].forVotes[msg.sender] == 0, "cannot switch votes");
@@ -134,7 +132,7 @@ contract AlunaGov is LPTokenWrapperWithSlash {
         super.withdraw(amount);
     }
 
-    function resolveProposal(uint256 id) public {
+    function resolveProposal(uint256 id) external {
         require(proposals[id].proposer != address(0), "non-existent proposal");
         require(proposals[id].end < block.timestamp , "ongoing proposal");
         require(proposals[id].totalSupply == 0, "already resolved");
